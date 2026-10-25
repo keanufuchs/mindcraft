@@ -260,7 +260,8 @@ function textOf(reason) {
     }
     if (reason && typeof reason === 'object') {
         if (reason.value !== undefined) return textOf(reason.value);
-        return [reason.text, reason.translate, ...(reason.extra || []).map(textOf), ...(reason.with || []).map(textOf)].filter(Boolean).join(' ');
+        const parts = [reason.text, reason.translate, ...[].concat(reason.extra || []).map(textOf), ...[].concat(reason.with || []).map(textOf)].filter(Boolean);
+        return parts.length ? parts.join(' ') : JSON.stringify(reason);
     }
     return String(reason);
 }

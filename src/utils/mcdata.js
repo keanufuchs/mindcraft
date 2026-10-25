@@ -75,7 +75,19 @@ export function initBot(username) {
     let pendingPositionPacket = null;
     const POSITION_THROTTLE_MS = 50;
     const originalWrite = bot._client.write.bind(bot._client);
+    // 26.3 servers kick clients that send a second move packet without client_tick_end in between
+    // (invalid_player_movement). mineflayer <= 4.39 never sends it (PrismarineJS/mineflayer#4189),
+    // so end the "tick" after every movement packet. Older protocols have no tick_end packet.
+    let tickEndSupported = true;
+    const writeMove = (name, data) => {
+        const res = originalWrite(name, data);
+        if (tickEndSupported) {
+            try { originalWrite('tick_end', {}); } catch (err) { tickEndSupported = false; }
+        }
+        return res;
+    };
     bot._client.write = function(name, data) {
+        if (name === 'flying') return writeMove(name, data);
         if (name === 'position' || name === 'position_look' || name === 'look') {
             const now = Date.now();
             if (now - lastPositionUpdate < POSITION_THROTTLE_MS) {
@@ -84,7 +96,7 @@ export function initBot(username) {
                     pendingPositionPacket = setTimeout(() => {
                         pendingPositionPacket = null;
                         lastPositionUpdate = Date.now();
-                        originalWrite(name, data);
+                        writeMove(name, data);
                     }, POSITION_THROTTLE_MS - (now - lastPositionUpdate));
                 }
                 return;
@@ -94,6 +106,7 @@ export function initBot(username) {
                 clearTimeout(pendingPositionPacket);
                 pendingPositionPacket = null;
             }
+            return writeMove(name, data);
         }
         return originalWrite(name, data);
     };
