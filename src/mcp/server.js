@@ -79,7 +79,7 @@ export function startMcpServer(agent) {
 
     app.post('/mcp', async (req, res) => {
         const server = newServer();
-        const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+        const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
         res.on('close', () => {
             transport.close();
             server.close();
