@@ -235,6 +235,12 @@ export class McpAgent {
     shutUp() {}
 
     cleanKill(msg = 'Killing agent process...') {
+        // the unstuck mode gives up after 10 s; a reconnect would only make the bot leave and rejoin
+        if (/couldn't get unstuck/.test(msg)) {
+            this.requestInterrupt();
+            this.events.push({ type: 'danger', text: 'Stuck and could not free itself. Try goToSurface, digDown, moveAway or another route.' });
+            return;
+        }
         console.error(msg);
         this.reconnect(msg, 5);
     }

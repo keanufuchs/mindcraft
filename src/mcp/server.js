@@ -222,7 +222,6 @@ function customTools() {
                     out.push(query(agent, '!stats'), query(agent, '!inventory'), query(agent, '!nearbyBlocks'), query(agent, '!entities'));
                     out.push(`Players online: ${Object.keys(agent.bot.players).filter(n => n !== agent.name).join(', ') || 'none'}`);
                     out.push(`Current action: ${agent.actions.currentActionLabel || 'none'}`);
-                    out.push(agent.bot.modes.getMiniDocs());
                 } else {
                     out.push('Bot is not connected.');
                 }
@@ -282,13 +281,20 @@ function customTools() {
                 const list = [...blocks].sort((a, b) => a.y - b.y || a.x - b.x || a.z - b.z);
                 const promise = agent.actions.runAction('action:place_blocks', async () => {
                     const bot = agent.bot;
-                    let placed = 0, failed = 0;
-                    for (const b of list) {
-                        if (bot.interrupt_code) break;
-                        const ok = await skills.placeBlock(bot, b.block, b.x, b.y, b.z, 'bottom', true).catch(err => { skills.log(bot, `${b.block} at ${b.x},${b.y},${b.z}: ${err.message}`); return false; });
-                        if (ok) placed++; else failed++;
+                    let placed = 0;
+                    let todo = list;
+                    // blocks without support may become placeable once their neighbours exist: retry in passes
+                    for (let pass = 0; pass < 3 && todo.length && !bot.interrupt_code; pass++) {
+                        const failed = [];
+                        for (const b of todo) {
+                            if (bot.interrupt_code) break;
+                            const ok = await skills.placeBlock(bot, b.block, b.x, b.y, b.z, 'bottom', true).catch(err => { skills.log(bot, `${b.block} at ${b.x},${b.y},${b.z}: ${err.message}`); return false; });
+                            if (ok) placed++; else failed.push(b);
+                        }
+                        if (failed.length === todo.length) { todo = failed; break; }
+                        todo = failed;
                     }
-                    skills.log(bot, `Placed ${placed} of ${list.length} blocks${failed ? `, ${failed} failed` : ''}.`);
+                    skills.log(bot, `Placed ${placed} of ${list.length} blocks.` + (todo.length ? ` Not placed: ${todo.slice(0, 20).map(b => `${b.x},${b.y},${b.z}`).join(' ')}${todo.length > 20 ? ' ...' : ''}` : ''));
                 }, { timeout: 30 }).then(r => (r.interrupted && !r.timedout ? undefined : r.message));
                 return awaitAction(agent, 'place_blocks', promise);
             },
