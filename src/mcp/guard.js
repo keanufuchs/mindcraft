@@ -59,6 +59,16 @@ export class Guard {
         this.index.clear();
         this.scanTime = 0;
 
+        // Blocks that need a minimum pickaxe tier (iron/gold/diamond ore, obsidian ...) carry the
+        // material "incorrect_for_<tier>_tool", for which mineflayer knows no tool speed, so even the
+        // right pickaxe digs at hand speed (iron ore: 4.5 s instead of 0.75 s). Mindcraft's patch only
+        // fixes the wooden tier; treat all of them as pickaxe blocks (harvest rules stay unchanged).
+        const pickaxeMaterial = (block) => {
+            if (block && /^incorrect_for_\w+_tool$/.test(block.material || '')) block.material = 'mineable/pickaxe';
+            return block;
+        };
+        const origDigTime = bot.digTime.bind(bot);
+        bot.digTime = (block, ...args) => origDigTime(pickaxeMaterial(block), ...args);
         const origDig = bot.dig.bind(bot);
         bot.dig = async (block, ...args) => {
             if (this.protects(block)) {
@@ -66,8 +76,9 @@ export class Guard {
             }
             // mineflayer computes the dig time once at the start; starting while falling (e.g. right
             // after breaking the block below) uses the 5x airborne penalty for the whole dig
+            pickaxeMaterial(block);
             if (!bot.entity.onGround && !bot.entity.isInWater) await waitForGround(bot, 1500);
-            if (process.env.DEBUG_MOVES) console.log(`[dig] ${block.name} expected ${bot.digTime(block)}ms onGround=${bot.entity.onGround} held=${bot.heldItem?.name}`);
+            if (process.env.DEBUG_MOVES) console.log(`[dig] ${block.name} (${block.material}) expected ${bot.digTime(block)}ms onGround=${bot.entity.onGround} held=${bot.heldItem?.name}`);
             const res = await origDig(block, ...args);
             this.forget(block.position);
             return res;
