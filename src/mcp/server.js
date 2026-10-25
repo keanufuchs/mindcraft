@@ -337,6 +337,39 @@ function customTools() {
             },
         },
         {
+            name: 'blocks_around',
+            description: 'Look at the blocks around you: for each height level (feet-1 to head+1) a small top-down map of the area within radius (default 2). Use it when you seem stuck, to see walls, water and openings.',
+            inputSchema: { type: 'object', properties: { radius: { type: 'integer', minimum: 1, maximum: 4 } } },
+            run: async (agent, { radius = 2 }) => {
+                requireConnected(agent);
+                const bot = agent.bot;
+                const r = Math.min(Math.max(Number(radius) || 2, 1), 4);
+                const c = bot.entity.position.floored();
+                const out = [`Center (you) at ${c.x}, ${c.y}, ${c.z}. Rows = z from ${c.z - r} (north) to ${c.z + r}, columns = x from ${c.x - r} (west) to ${c.x + r}. . = air, ~ = water, L = lava, # = other block (name list below), @ = you.`];
+                const names = new Map();
+                for (let dy = 2; dy >= -1; dy--) {
+                    out.push(`y=${c.y + dy}${dy === 0 ? ' (feet)' : dy === 1 ? ' (head)' : ''}:`);
+                    for (let dz = -r; dz <= r; dz++) {
+                        let row = '';
+                        for (let dx = -r; dx <= r; dx++) {
+                            const b = bot.blockAt(c.offset(dx, dy, dz));
+                            const n = b ? b.name : '?';
+                            let ch = '#';
+                            if (n === 'air' || n === 'cave_air' || n === 'void_air') ch = '.';
+                            else if (n === 'water') ch = '~';
+                            else if (n === 'lava') ch = 'L';
+                            else names.set(n, (names.get(n) || 0) + 1);
+                            if (dx === 0 && dz === 0 && (dy === 0 || dy === 1) && ch === '.') ch = '@';
+                            row += ch;
+                        }
+                        out.push('  ' + row);
+                    }
+                }
+                out.push('Blocks: ' + [...names.entries()].map(([n, k]) => `${n} x${k}`).join(', '));
+                return out.join('\n');
+            },
+        },
+        {
             name: 'nearby_players',
             description: 'Players near the bot with distance and position.',
             inputSchema: { type: 'object', properties: {} },
