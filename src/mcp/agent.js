@@ -11,6 +11,7 @@ import { MemoryBank } from '../agent/memory_bank.js';
 import settings from '../agent/settings.js';
 import { EventQueue } from './events.js';
 import { Guard } from './guard.js';
+import { opOnSpawn } from './optools.js';
 
 const UPDATE_INTERVAL = 300;
 const IGNORE_SYSTEM = ['Set own game mode to', 'Set the time to', 'Set the difficulty to', 'Teleported ', 'Set the weather to', 'Gamerule '];
@@ -91,6 +92,7 @@ export class McpAgent {
             this.events.push({ type: 'system', text: `Connected as ${this.name}. Position ${p.x.toFixed(0)}, ${p.y.toFixed(0)}, ${p.z.toFixed(0)} (${bot.game.dimension}), gamemode ${bot.game.gameMode}.` });
             this.setupEvents(bot, gen);
             this.updateLoop(gen);
+            opOnSpawn(this);
             bot.emit('idle');
         });
 

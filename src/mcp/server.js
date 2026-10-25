@@ -21,6 +21,7 @@ import * as world from '../agent/library/world.js';
 import settings from '../agent/settings.js';
 import { formatEvent } from './events.js';
 import { splitChat } from './agent.js';
+import { opTools } from './optools.js';
 
 const ACTION_WAIT_MS = 25000;
 const MAX_WAIT_S = 600;
@@ -39,7 +40,7 @@ export function startMcpServer(agent) {
         inputSchema: commandSchema(c),
         command: c,
     }));
-    const tools = [...customTools(), ...commandTools];
+    const tools = [...customTools(), ...(settings.op_tools ? opTools(awaitAction) : []), ...commandTools];
     const byName = new Map(tools.map(t => [t.name, t]));
 
     function newServer() {
@@ -190,7 +191,7 @@ function shortStatus(agent) {
     const b = agent.bot;
     const p = b.entity.position;
     const action = agent.actions.currentActionLabel || 'idle';
-    return `Bot: pos ${p.x.toFixed(0)}, ${p.y.toFixed(0)}, ${p.z.toFixed(0)} | health ${Math.round(b.health)}/20 | food ${Math.round(b.food)}/20 | ${action}`;
+    return `Bot: pos ${p.x.toFixed(0)}, ${p.y.toFixed(0)}, ${p.z.toFixed(0)} in ${b.game.dimension} (${b.game.gameMode}) | health ${Math.round(b.health)}/20 | food ${Math.round(b.food)}/20 | ${action}`;
 }
 
 function customTools() {
