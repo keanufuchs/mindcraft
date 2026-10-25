@@ -41,7 +41,7 @@ setSettings({
     ],
     // reflexes; hunting is off so the bot does not raid other players' animal farms
     modes: { ...defaults.modes, hunting: false, cheat: false, ...JSON.parse(env.MODES || '{}') },
-    guard: { radius: Number(env.GUARD_RADIUS || 5), minCount: Number(env.GUARD_MIN_COUNT || 4) },
+    guard: { enabled: env.GUARD === 'on', radius: Number(env.GUARD_RADIUS || 5), minCount: Number(env.GUARD_MIN_COUNT || 4) },
 });
 
 if (!env.MCP_TOKEN && env.MCP_NO_AUTH !== '1') {

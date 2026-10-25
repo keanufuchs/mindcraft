@@ -23,7 +23,7 @@ and the result follows as an `action_done` event.
 
 ## Protection (`src/mcp/guard.js`)
 
-Rules enforced in code, independent of the prompt:
+Off by default, `GUARD=on` enables it. Players are never attacked either way. When enabled, these rules are enforced in code, independent of the prompt:
 
 - no breaking of player-made blocks (planks, glass, doors, ...) unless the bot placed them itself,
   and no breaking of any block with ≥ 4 such blocks within 5 blocks (pathfinder and collectBlock skip them too)
@@ -45,6 +45,7 @@ Rules enforced in code, independent of the prompt:
 | `DATA_DIR` | `./bots/mcp` | `state.json` (places, own blocks, notes, modes) and `auth/` (Microsoft token cache) |
 | `MODES` | – | JSON overrides, e.g. `{"torch_placing": false}` |
 | `BLOCKED_ACTIONS` | – | JSON list of further commands to block |
+| `GUARD` | off | `on` enables the build/chest/animal protection |
 | `GUARD_RADIUS`, `GUARD_MIN_COUNT` | `5`, `4` | build protection heuristic |
 
 Docker: `Dockerfile.mcp` (data in `/data`).

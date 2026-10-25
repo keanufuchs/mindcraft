@@ -1,4 +1,5 @@
 // Build protection for a bot that plays on a shared survival server.
+// Off by default (GUARD=on enables it); players are never attacked either way.
 //
 // The bot must not destroy what other players built, must not loot their chests and
 // must not attack players, named mobs or animals in their farms. These rules live in
@@ -38,7 +39,8 @@ pf.Movements.prototype.safeToBreak = function (block) {
 };
 
 export class Guard {
-    constructor(state, { radius = 5, minCount = 4 } = {}) {
+    constructor(state, { enabled = false, radius = 5, minCount = 4 } = {}) {
+        this.enabled = enabled;
         this.state = state;          // persistent state: state.placed = ["x,y,z", ...]
         this.placed = new Set(state.placed || []);
         this.radius = radius;
@@ -159,7 +161,7 @@ export class Guard {
 
     // true if the bot must not break this block
     protects(block) {
-        if (!block || !block.position || !this.bot) return false;
+        if (!this.enabled || !block || !block.position || !this.bot) return false;
         if (this.isOwn(block.position)) return false;
         if (ARTIFICIAL.test(block.name)) {
             this.lastReason = `${block.name} looks player-made`;
@@ -173,7 +175,7 @@ export class Guard {
     }
 
     mayOpen(block) {
-        if (this.isOwn(block.position)) return true;
+        if (!this.enabled || this.isOwn(block.position)) return true;
         // a lone chest (dungeon, shipwreck, ...) is fine, chests in builds are not
         const n = this.countNear(block.position, this.radius, this.minCount + 1);
         if (n - 1 >= this.minCount) {
@@ -189,7 +191,7 @@ export class Guard {
             this.lastReason = 'players are never attacked';
             return false;
         }
-        if (mc.isHostile(entity)) return true;
+        if (!this.enabled || mc.isHostile(entity)) return true;
         if (hasCustomName(entity)) {
             this.lastReason = `${entity.name} has a name tag (someone's pet)`;
             return false;
