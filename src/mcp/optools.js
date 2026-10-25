@@ -43,9 +43,9 @@ function waitFor(bot, event, check, ms) {
     });
 }
 
-function here(bot) {
-    const p = bot.entity.position;
-    return { dimension: bot.game.dimension, x: Math.floor(p.x), y: Math.floor(p.y), z: Math.floor(p.z) };
+function here(agent) {
+    const p = agent.bot.entity.position;
+    return { dimension: agent.world || agent.bot.game.dimension, x: Math.floor(p.x), y: Math.floor(p.y), z: Math.floor(p.z) };
 }
 
 function clean(text, max) {
@@ -95,7 +95,7 @@ async function land(agent) {
     delete agent.state.flightModes;
     agent.state.flying = false;
     agent.persist();
-    return `Landed at ${fmt(here(bot))}, back in survival.`;
+    return `Landed at ${fmt(here(agent))}, back in survival.`;
 }
 
 // called by the agent after every (re)connect: never stay in creative by accident
@@ -118,13 +118,13 @@ export function opTools(awaitAction) {
                 need(agent);
                 if (!PLAYER.test(String(player))) throw new Error('Invalid player name');
                 const bot = agent.bot;
-                const before = here(bot);
+                const before = here(agent);
                 const moved = waitFor(bot, 'forcedMove', null, 5000);
                 run(agent, `tp ${bot.username} ${player}`);
                 if (!await moved) return `Teleport to ${player} did not happen (offline or wrong name?).`;
                 agent.state.lastTeleport = before;
                 agent.persist();
-                return `Teleported to ${player}, now at ${fmt(here(bot))}. Previous spot saved: ${fmt(before)}.`;
+                return `Teleported to ${player}, now at ${fmt(here(agent))}. Previous spot saved: ${fmt(before)}.`;
             },
         },
         {
@@ -141,7 +141,7 @@ export function opTools(awaitAction) {
                 if (!await moved) return 'Teleport back did not happen.';
                 delete agent.state.lastTeleport;
                 agent.persist();
-                return `Back at ${fmt(here(bot))}.`;
+                return `Back at ${fmt(here(agent))}.`;
             },
         },
         {
@@ -152,11 +152,11 @@ export function opTools(awaitAction) {
                 need(agent);
                 if (!worlds.includes(world)) throw new Error(`Only ${worlds.join(', ')}`);
                 const bot = agent.bot;
-                if (!/lobby/i.test(String(bot.game.dimension))) return `Only allowed from the lobby. You are in ${bot.game.dimension}.`;
+                if (!/lobby/i.test(String(agent.world))) return `Only allowed from the lobby. You are in ${agent.world || 'an unknown world'}.`;
                 const moved = waitFor(bot, 'forcedMove', null, 8000);
                 run(agent, `mvtp ${bot.username} ${world}`);
                 if (!await moved) return `Teleport to ${world} did not happen.`;
-                return `Now in ${bot.game.dimension} at ${fmt(here(bot))}.`;
+                return `Now at ${fmt(here(agent))}.`;
             },
         },
         {
@@ -296,7 +296,7 @@ export function opTools(awaitAction) {
                 run(agent, `tp ${bot.username} ${target.x + 0.5} ${target.y} ${target.z + 0.5}`);
                 agent.lastRescue = Date.now();
                 if (!await moved) return 'Rescue teleport did not happen.';
-                return `Rescued to ${fmt(here(bot))}.`;
+                return `Rescued to ${fmt(here(agent))}.`;
             },
         },
         {

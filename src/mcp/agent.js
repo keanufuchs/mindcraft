@@ -61,6 +61,13 @@ export class McpAgent {
         };
         const bot = this.bot = initBot(this.name);
         initModes(this);
+        // bot.game.dimension is only the dimension type (overworld); Multiverse worlds have their own key, e.g. minecraft:lobby
+        const onWorld = (packet) => {
+            const name = packet?.worldState?.name || packet?.worldName;
+            if (name) this.world = String(name);
+        };
+        bot._client.on('login', onWorld);
+        bot._client.on('respawn', onWorld);
 
         const spawnTimeout = setInterval(() => {
             if (this.msaPending) return; // waiting for a human to log in
@@ -89,7 +96,7 @@ export class McpAgent {
                 bannedFood: ['rotten_flesh', 'spider_eye', 'poisonous_potato', 'pufferfish', 'chicken'],
             };
             const p = bot.entity.position;
-            this.events.push({ type: 'system', text: `Connected as ${this.name}. Position ${p.x.toFixed(0)}, ${p.y.toFixed(0)}, ${p.z.toFixed(0)} (${bot.game.dimension}), gamemode ${bot.game.gameMode}.` });
+            this.events.push({ type: 'system', text: `Connected as ${this.name}. Position ${p.x.toFixed(0)}, ${p.y.toFixed(0)}, ${p.z.toFixed(0)} in world ${this.world || bot.game.dimension}, gamemode ${bot.game.gameMode}.` });
             this.setupEvents(bot, gen);
             this.updateLoop(gen);
             opOnSpawn(this);

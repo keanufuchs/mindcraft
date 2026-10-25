@@ -191,7 +191,7 @@ function shortStatus(agent) {
     const b = agent.bot;
     const p = b.entity.position;
     const action = agent.actions.currentActionLabel || 'idle';
-    return `Bot: pos ${p.x.toFixed(0)}, ${p.y.toFixed(0)}, ${p.z.toFixed(0)} in ${b.game.dimension} (${b.game.gameMode}) | health ${Math.round(b.health)}/20 | food ${Math.round(b.food)}/20 | ${action}`;
+    return `Bot: pos ${p.x.toFixed(0)}, ${p.y.toFixed(0)}, ${p.z.toFixed(0)} in ${agent.world || b.game.dimension} (${b.game.gameMode}) | health ${Math.round(b.health)}/20 | food ${Math.round(b.food)}/20 | ${action}`;
 }
 
 function customTools() {
