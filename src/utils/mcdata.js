@@ -52,6 +52,25 @@ export const WOOL_COLORS = [
 ]
 
 
+// minecraft-data declares the acknowledgement checksum of chat_command_signed as i8 on newer
+// versions, but the value is unsigned (0-255). Values >127 crash the serializer and drop the
+// connection whenever the bot runs a command. The bundled patch only fixes 1.21.6, so fix the
+// loaded protocol in memory (node-minecraft-protocol uses the same cached object).
+function fixCommandChecksum(version) {
+    try {
+        const protocol = minecraftData(version)?.protocol;
+        const walk = (o) => {
+            if (Array.isArray(o)) { o.forEach(walk); return; }
+            if (!o || typeof o !== 'object') return;
+            if (o.name === 'checksum' && o.type === 'i8') o.type = 'u8';
+            for (const k in o) walk(o[k]);
+        };
+        walk(protocol?.play?.toServer);
+    } catch (err) {
+        console.warn('[mcdata] could not patch checksum type:', err.message);
+    }
+}
+
 export function initBot(username) {
     const options = {
         username: username,
@@ -66,6 +85,7 @@ export function initBot(username) {
         delete options.version;
     }
 
+    if (options.version) fixCommandChecksum(options.version);
     const bot = createBot(options);
 
     // Throttle position packets to avoid kicks on Paper/Spigot servers
