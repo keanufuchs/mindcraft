@@ -16,7 +16,8 @@ COPY patches ./patches
 RUN npm install && npm cache clean --force
 
 COPY . .
-RUN mkdir -p /data && chown -R node:node /app /data
+# the app only writes to /data (no chown of node_modules, that takes ages on overlayfs)
+RUN mkdir -p /data && chown node:node /data
 USER node
 
 ENV DATA_DIR=/data MCP_PORT=3100
