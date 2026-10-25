@@ -24,6 +24,17 @@ import { splitChat, PROTECTED_MODES } from './agent.js';
 import { opTools } from './optools.js';
 
 const ACTION_WAIT_MS = 25000;
+
+// Action tools called in parallel (e.g. place table, craft sticks, craft pickaxe in one batch)
+// would interrupt each other and fight over the inventory. Run them one after another in call
+// order: the next one starts when the previous tool call has returned (done, or still running
+// after ACTION_WAIT_MS, then a new action interrupts it as usual). stop is never queued.
+let actionChain = Promise.resolve();
+export function chained(fn) {
+    const run = actionChain.then(fn, fn);
+    actionChain = run.catch(() => {});
+    return run;
+}
 const MAX_WAIT_S = 600;
 
 const TYPE_MAP = {
@@ -40,7 +51,7 @@ export function startMcpServer(agent) {
         inputSchema: commandSchema(c),
         command: c,
     }));
-    const tools = [...customTools(), ...(settings.op_tools ? opTools(awaitAction) : []), ...commandTools];
+    const tools = [...customTools(), ...(settings.op_tools ? opTools((agent, label, makePromise) => chained(() => awaitAction(agent, label, makePromise()))) : []), ...commandTools];
     const byName = new Map(tools.map(t => [t.name, t]));
 
     function newServer() {
@@ -154,13 +165,12 @@ async function runCommand(agent, command, args) {
         return `${args.mode_name} stays on. To stand still on purpose use stay (it pauses these reflexes while it runs).`;
     const message = parts.length ? `${command.name}(${parts.join(', ')})` : command.name;
 
-    const promise = executeCommand(agent, message);
-    if (!actionsList.includes(command)) {
-        const res = await promise;
+    if (!actionsList.includes(command) || command.name === '!stop') {
+        const res = await executeCommand(agent, message);
         if (command.name === '!setMode') agent.persist();
         return res;
     }
-    return awaitAction(agent, command.name.substring(1), promise);
+    return chained(() => awaitAction(agent, command.name.substring(1), executeCommand(agent, message)));
 }
 
 async function awaitAction(agent, label, promise) {
@@ -285,7 +295,7 @@ function customTools() {
                 if (!Array.isArray(blocks) || !blocks.length) throw new Error('blocks must be a non-empty list');
                 if (blocks.some(b => b.block === 'air')) throw new Error('Use break_block to remove blocks.');
                 const list = [...blocks].sort((a, b) => a.y - b.y || a.x - b.x || a.z - b.z);
-                const promise = agent.actions.runAction('action:place_blocks', async () => {
+                return chained(() => awaitAction(agent, 'place_blocks', agent.actions.runAction('action:place_blocks', async () => {
                     const bot = agent.bot;
                     // building often means standing still; the stall watchdog (inventory changes) covers real hangs
                     bot.modes.pause('unstuck');
@@ -303,8 +313,7 @@ function customTools() {
                         todo = failed;
                     }
                     skills.log(bot, `Placed ${placed} of ${list.length} blocks.` + (todo.length ? ` Not placed: ${todo.slice(0, 20).map(b => `${b.x},${b.y},${b.z}`).join(' ')}${todo.length > 20 ? ' ...' : ''}` : ''));
-                }, { timeout: 30 }).then(r => (r.interrupted && !r.timedout ? undefined : r.message));
-                return awaitAction(agent, 'place_blocks', promise);
+                }, { timeout: 30 }).then(r => (r.interrupted && !r.timedout ? undefined : r.message))));
             },
         },
         {
@@ -315,10 +324,9 @@ function customTools() {
                 requireConnected(agent);
                 const block = agent.bot.blockAt(new Vec3(x, y, z));
                 if (block && agent.guard.protects(block)) return `Refused: ${block.name} at ${x}, ${y}, ${z} is protected (${agent.guard.lastReason}).`;
-                const promise = agent.actions.runAction('action:break_block', async () => {
+                return chained(() => awaitAction(agent, 'break_block', agent.actions.runAction('action:break_block', async () => {
                     await skills.breakBlockAt(agent.bot, x, y, z);
-                }, { timeout: 5 }).then(r => (r.interrupted && !r.timedout ? undefined : r.message));
-                return awaitAction(agent, 'break_block', promise);
+                }, { timeout: 5 }).then(r => (r.interrupted && !r.timedout ? undefined : r.message))));
             },
         },
         {

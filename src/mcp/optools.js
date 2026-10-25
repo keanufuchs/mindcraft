@@ -107,6 +107,7 @@ export function opOnSpawn(agent) {
     }
 }
 
+// awaitAction(agent, label, makePromise): queued like all action tools, see chained() in server.js
 export function opTools(awaitAction) {
     const worlds = settings.op_worlds || [];
     return [
@@ -195,7 +196,7 @@ export function opTools(awaitAction) {
                 const target = new Vec3(Number(x), Number(y), Number(z));
                 if (![target.x, target.y, target.z].every(Number.isFinite)) throw new Error('Invalid coordinates');
                 if (bot.entity.position.distanceTo(target) > FLY_RANGE) return `Too far (${bot.entity.position.distanceTo(target).toFixed(0)} blocks). Flying only within ${FLY_RANGE} blocks; walk or teleport to the player first.`;
-                const promise = agent.actions.runAction('action:fly_to', async () => {
+                return awaitAction(agent, 'fly_to', () => agent.actions.runAction('action:fly_to', async () => {
                     if (!agent.state.flying) {
                         agent.state.flightModes = {};
                         for (const m of FLIGHT_MODES_OFF) {
@@ -213,8 +214,7 @@ export function opTools(awaitAction) {
                         land(agent).then(r => agent.events.push({ type: 'system', text: `Auto landing after 15 minutes: ${r}` }));
                     }, AUTO_LAND_MS);
                     bot.output += `Hovering at ${target.x}, ${target.y}, ${target.z}.`;
-                }, { timeout: 3 }).then(r => (r.interrupted && !r.timedout ? undefined : r.message));
-                return awaitAction(agent, 'fly_to', promise);
+                }, { timeout: 3 }).then(r => (r.interrupted && !r.timedout ? undefined : r.message)));
             },
         },
         {
