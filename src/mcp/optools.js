@@ -98,8 +98,28 @@ async function land(agent) {
     return `Landed at ${fmt(here(agent))}, back in survival.`;
 }
 
-// called by the agent after every (re)connect: never stay in creative by accident
+// IMMORTAL=on: keep Resistance V (infinite, hidden) on the bot. It blocks all damage from mobs,
+// players, drowning, falling, fire, explosions; knockback still applies. /kill and the void ignore
+// resistance, so the bot can still die (reset). Effects are lost on death and by milk, so the bot
+// re-applies it after every spawn/respawn and checks it every 30 s.
+function hasResistance(bot) {
+    const id = bot.registry.effectsByName?.resistance?.id ?? bot.registry.effectsByName?.Resistance?.id;
+    const e = id !== undefined ? bot.entity.effects?.[id] : undefined;
+    return e && e.amplifier >= 4;
+}
+function ensureImmortal(agent) {
+    if (!settings.immortal || !agent.connected || hasResistance(agent.bot)) return;
+    run(agent, `effect give ${agent.bot.username} minecraft:resistance infinite 4 true`);
+}
+export function opStartImmortal(agent) {
+    if (!settings.immortal) return;
+    clearInterval(agent.immortalTimer);
+    agent.immortalTimer = setInterval(() => ensureImmortal(agent), 30000);
+}
+
+// called by the agent after every (re)connect and respawn: never stay in creative by accident
 export function opOnSpawn(agent) {
+    if (settings.immortal) setTimeout(() => ensureImmortal(agent), 1500);
     if (!settings.op_tools) return;
     if (agent.state.flying || agent.bot.game.gameMode === 'creative') {
         agent.events.push({ type: 'system', text: 'Was still flying/creative after reconnect, landing.' });
@@ -327,6 +347,17 @@ export function opTools(awaitAction) {
                 run(agent, cmd);
                 agent.lastAnnounce = Date.now();
                 return 'Announced.';
+            },
+        },
+        {
+            name: 'reset_by_kill',
+            description: 'OP: kill yourself with /kill as a last-resort reset (e.g. hopelessly stuck and rescue_teleport did not help). You respawn at the world spawn or your bed; your items drop where you were (go back with goToRememberedPlace last_death_position). Normal damage cannot kill you, this can.',
+            inputSchema: { type: 'object', properties: { reason: { type: 'string', description: 'why a reset is needed' } }, required: ['reason'] },
+            run: async (agent, { reason }) => {
+                need(agent);
+                console.log(`[op] reset_by_kill: ${String(reason).substring(0, 200)}`);
+                run(agent, `kill ${agent.bot.username}`);
+                return 'Killed yourself for a reset. Wait for the death/respawn events, then continue.';
             },
         },
         {

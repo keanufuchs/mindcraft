@@ -43,6 +43,7 @@ setSettings({
     modes: { ...defaults.modes, hunting: false, cheat: false, ...JSON.parse(env.MODES || '{}') },
     // fixed operator commands (teleport to a player, time, weather, flying) for an OP bot account
     op_tools: env.OP_TOOLS === 'on',
+    immortal: env.IMMORTAL === 'on', // keep Resistance V on the bot (needs OP), see optools.js
     op_worlds: (env.OP_WORLDS || 'world').split(',').map(w => w.trim()).filter(Boolean),
     guard: { enabled: env.GUARD === 'on', radius: Number(env.GUARD_RADIUS || 5), minCount: Number(env.GUARD_MIN_COUNT || 4) },
 });

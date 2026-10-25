@@ -11,7 +11,7 @@ import { MemoryBank } from '../agent/memory_bank.js';
 import settings from '../agent/settings.js';
 import { EventQueue } from './events.js';
 import { Guard } from './guard.js';
-import { opOnSpawn } from './optools.js';
+import { opOnSpawn, opStartImmortal } from './optools.js';
 
 const UPDATE_INTERVAL = 300;
 // reflexes the controller may not switch off (stay pauses them on its own)
@@ -113,6 +113,9 @@ export class McpAgent {
             this.setupEvents(bot, gen);
             this.updateLoop(gen);
             opOnSpawn(this);
+            opStartImmortal(this);
+            // mineflayer emits spawn again after every respawn
+            bot.on('spawn', () => { if (gen === this.generation) opOnSpawn(this); });
             bot.emit('idle');
         });
 
