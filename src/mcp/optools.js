@@ -279,15 +279,22 @@ export function opTools(awaitAction) {
                 const p = bot.entity.position;
                 let target = p.floored();
                 if (mode === 'surface') {
-                    const solid = (y) => bot.blockAt(new Vec3(p.x, y, p.z))?.boundingBox === 'block';
-                    const free = (y) => { const b = bot.blockAt(new Vec3(p.x, y, p.z)); return b && b.boundingBox === 'empty' && !/lava|fire/.test(b.name); };
+                    const at = (y) => bot.blockAt(new Vec3(p.x, y, p.z));
+                    const solid = (y) => at(y)?.boundingBox === 'block';
+                    // air only: water counts as not free, so we never land on a river bed
+                    const free = (y) => { const b = at(y); return b && b.boundingBox === 'empty' && !/water|lava|fire|bubble_column/.test(b.name); };
+                    const water = (y) => /water|bubble_column/.test(at(y)?.name || '');
                     const nether = /nether/.test(String(bot.game.dimension));
                     let found = null;
                     if (nether) {
                         // the nether has a bedrock roof: take the first safe pocket above
                         for (let y = target.y + 1; y < 126 && !found; y++) if (solid(y - 1) && free(y) && free(y + 1)) found = y;
                     } else {
-                        for (let y = 319; y > target.y && !found; y--) if (solid(y - 1) && free(y) && free(y + 1)) found = y;
+                        for (let y = 319; y > target.y && !found; y--) {
+                            if (solid(y - 1) && free(y) && free(y + 1)) found = y;
+                            // the highest thing is a lake or river: surface of the water (swim out from there)
+                            else if (water(y - 1) && free(y) && free(y + 1)) found = y - 1;
+                        }
                     }
                     if (!found) return 'No safe surface found straight above you.';
                     target = new Vec3(target.x, found, target.z);
