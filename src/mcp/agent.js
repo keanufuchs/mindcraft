@@ -190,7 +190,7 @@ export class McpAgent {
         bot.on('path_reset', (reason) => alive() && console.log(`[path] reset: ${reason}`));
         bot.on('path_stop', () => alive() && console.log('[path] stop'));
         bot.on('goal_reached', () => alive() && console.log('[path] goal reached'));
-        bot.on('forcedMove', () => alive() && console.log(`[move] server set position ${bot.entity.position.floored()}`));
+        bot.on('forcedMove', () => alive() && console.log(`[move] server set position ${process.env.DEBUG_MOVES ? bot.entity.position.toString() : bot.entity.position.floored()}`));
 
         bot.on('idle', () => {
             if (!alive()) return;

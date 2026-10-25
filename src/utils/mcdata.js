@@ -113,6 +113,7 @@ export function initBot(username) {
         if (pending) {
             const p = pending;
             pending = null;
+            if (process.env.DEBUG_MOVES) console.log(`[send] ${p.name} ${['x', 'y', 'z'].map(k => p.data[k]?.toFixed?.(3)).join(' ')} onGround=${p.data.onGround}`);
             originalWrite(p.name, p.data);
         }
         if (tickEndSupported) {
