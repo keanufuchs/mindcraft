@@ -109,11 +109,22 @@ export function initBot(username) {
         if (!look) { delete d.yaw; delete d.pitch; }
         return { name: pos && look ? 'position_look' : pos ? 'position' : look ? 'look' : 'flying', data: d };
     };
+    // Mineflayer's physics leaves the hitbox (half width 0.3) exactly flush with a wall when the bot
+    // walks into it. Paper 26.3 treats that as colliding with a new block and resets the position
+    // every tick, so the bot cannot move along walls (tunnels, shafts). Report 1 mm off the wall.
+    const HALF = 0.3, EDGE = 1e-6, NUDGE = 1e-3;
+    const offEdge = (v) => {
+        const hi = v + HALF, lo = v - HALF;
+        if (Math.abs(hi - Math.round(hi)) < EDGE) return v - NUDGE;
+        if (Math.abs(lo - Math.round(lo)) < EDGE) return v + NUDGE;
+        return v;
+    };
     const flush = () => {
         if (pending) {
             const p = pending;
             pending = null;
-            if (process.env.DEBUG_MOVES) console.log(`[send] ${p.name} ${['x', 'y', 'z'].map(k => p.data[k]?.toFixed?.(3)).join(' ')} onGround=${p.data.onGround}`);
+            if (typeof p.data.x === 'number') { p.data.x = offEdge(p.data.x); p.data.z = offEdge(p.data.z); }
+            if (process.env.DEBUG_MOVES) console.log(`[send] ${p.name} ${['x', 'y', 'z'].map(k => p.data[k]).join(' ')} onGround=${p.data.onGround}`);
             originalWrite(p.name, p.data);
         }
         if (tickEndSupported) {
