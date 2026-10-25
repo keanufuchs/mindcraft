@@ -182,6 +182,16 @@ export class McpAgent {
             }
         });
 
+        // pathfinder diagnostics in the container log (why the bot does not move)
+        bot.on('path_update', (r) => {
+            if (!alive()) return;
+            console.log(`[path] ${r.status} len=${r.path?.length ?? 0} nodes=${r.visitedNodes ?? '?'} ${Math.round(r.time ?? 0)}ms`);
+        });
+        bot.on('path_reset', (reason) => alive() && console.log(`[path] reset: ${reason}`));
+        bot.on('path_stop', () => alive() && console.log('[path] stop'));
+        bot.on('goal_reached', () => alive() && console.log('[path] goal reached'));
+        bot.on('forcedMove', () => alive() && console.log(`[move] server set position ${bot.entity.position.floored()}`));
+
         bot.on('idle', () => {
             if (!alive()) return;
             bot.clearControlStates();
