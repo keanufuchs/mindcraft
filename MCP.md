@@ -45,7 +45,7 @@ Off by default, `GUARD=on` enables it. Players are never attacked either way. Wh
 | `DATA_DIR` | `./bots/mcp` | `state.json` (places, own blocks, notes, modes) and `auth/` (Microsoft token cache) |
 | `MODES` | – | JSON overrides, e.g. `{"torch_placing": false}` |
 | `BLOCKED_ACTIONS` | – | JSON list of further commands to block |
-| `OP_TOOLS` | off | `on` adds fixed operator tools: teleport_to_player/back, go_to_world, set_time, set_weather, fly_to/land (bot account must be OP) |
+| `OP_TOOLS` | off | `on` adds fixed operator tools: teleport_to_player/back, go_to_world, set_time, set_weather, fly_to/land, write_sign, rotate_block, rescue_teleport, announce (bot account must be OP; no free-form commands) |
 | `OP_WORLDS` | `world` | worlds go_to_world may use (comma-separated, from a world whose name contains "lobby") |
 | `GUARD` | off | `on` enables the build/chest/animal protection |
 | `GUARD_RADIUS`, `GUARD_MIN_COUNT` | `5`, `4` | build protection heuristic |

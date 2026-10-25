@@ -3,7 +3,9 @@
 // The bot may not run free-form server commands (the chat tool refuses "/"). Instead these few
 // fixed commands are available, so a chat message cannot talk it into /give or /gamemode:
 // teleport itself to a player and back, go from the lobby into a world, set time and weather,
-// fly to a spot (temporarily creative) and land again.
+// fly to a spot (temporarily creative) and land again, and a few things a player does by hand
+// that Mineflayer cannot: write signs, turn a placed block, get out when stuck, colored announcements.
+// Rule of thumb: OP replaces what the bot cannot do technically, it never creates items or advantages.
 
 import Vec3 from 'vec3';
 import settings from '../agent/settings.js';
@@ -11,6 +13,12 @@ import settings from '../agent/settings.js';
 const PLAYER = /^[A-Za-z0-9_]{1,16}$/;
 const FLY_RANGE = 128;                 // flying is for showing/marking spots, not for travelling
 const AUTO_LAND_MS = 15 * 60 * 1000;   // land automatically if nobody does it
+const NEAR = 6;                        // write_sign / rotate_block only within reach
+const RESCUE_COOLDOWN_MS = 2 * 60 * 1000;
+const ANNOUNCE_COOLDOWN_MS = 30 * 1000;
+const COLORS = ['white', 'gold', 'yellow', 'green', 'aqua', 'light_purple', 'red', 'gray'];
+// blocks whose contents or second half would be lost when replaced with /setblock
+const NO_ROTATE = /chest|barrel|furnace|smoker|hopper|dispenser|dropper|shulker_box|brewing_stand|lectern|crafter|_door$|_bed$|sign|banner|campfire|chiseled_bookshelf|decorated_pot|jukebox|spawner|beacon/;
 const FLIGHT_MODES_OFF = ['self_preservation', 'unstuck', 'item_collecting', 'elbow_room', 'torch_placing', 'hunting'];
 
 function need(agent) {
@@ -38,6 +46,26 @@ function waitFor(bot, event, check, ms) {
 function here(bot) {
     const p = bot.entity.position;
     return { dimension: bot.game.dimension, x: Math.floor(p.x), y: Math.floor(p.y), z: Math.floor(p.z) };
+}
+
+function clean(text, max) {
+    // printable text only, no formatting codes
+    return String(text ?? '').replace(/[\u0000-\u001f\u007f§]/g, '').trim().substring(0, max);
+}
+
+function snbtString(text) {
+    return '"' + text.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+}
+
+function nearBlock(agent, x, y, z) {
+    const bot = agent.bot;
+    const pos = new Vec3(Math.floor(x), Math.floor(y), Math.floor(z));
+    if (![pos.x, pos.y, pos.z].every(Number.isFinite)) throw new Error('Invalid coordinates');
+    const dist = bot.entity.position.distanceTo(pos.offset(0.5, 0.5, 0.5));
+    if (dist > NEAR) throw new Error(`Block is ${dist.toFixed(0)} blocks away, go within ${NEAR} blocks first.`);
+    const block = bot.blockAt(pos);
+    if (!block) throw new Error('Block not loaded');
+    return block;
 }
 
 function fmt(p) {
@@ -187,6 +215,111 @@ export function opTools(awaitAction) {
                     bot.output += `Hovering at ${target.x}, ${target.y}, ${target.z}.`;
                 }, { timeout: 3 }).then(r => (r.interrupted && !r.timedout ? undefined : r.message));
                 return awaitAction(agent, 'fly_to', promise);
+            },
+        },
+        {
+            name: 'write_sign',
+            description: 'OP: write text on a sign that is already placed (Mineflayer cannot edit sign text). Up to 4 lines, max 20 characters each. Place the sign first (place_blocks / placeHere with a sign item).',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    x: { type: 'integer' }, y: { type: 'integer' }, z: { type: 'integer' },
+                    lines: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 4 },
+                },
+                required: ['x', 'y', 'z', 'lines'],
+            },
+            run: async (agent, { x, y, z, lines }) => {
+                need(agent);
+                const block = nearBlock(agent, x, y, z);
+                if (!/sign/.test(block.name)) return `The block at ${block.position} is ${block.name}, not a sign.`;
+                const text = [0, 1, 2, 3].map(i => snbtString(clean(Array.isArray(lines) ? lines[i] : '', 20)));
+                const p = block.position;
+                run(agent, `data merge block ${p.x} ${p.y} ${p.z} {front_text:{messages:[${text.join(',')}]}}`);
+                return `Sign at ${p.x}, ${p.y}, ${p.z} written.`;
+            },
+        },
+        {
+            name: 'rotate_block',
+            description: `OP: turn a block that is already placed (e.g. stairs, trapdoors, observers) to face another direction, because Mineflayer cannot choose the direction when placing. Same block type, only the facing changes. Not for containers, doors, beds, signs. Within ${NEAR} blocks.`,
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    x: { type: 'integer' }, y: { type: 'integer' }, z: { type: 'integer' },
+                    facing: { type: 'string', enum: ['north', 'south', 'east', 'west', 'up', 'down'] },
+                },
+                required: ['x', 'y', 'z', 'facing'],
+            },
+            run: async (agent, { x, y, z, facing }) => {
+                need(agent);
+                const block = nearBlock(agent, x, y, z);
+                if (NO_ROTATE.test(block.name)) return `${block.name} cannot be turned this way (contents or second half would be lost).`;
+                const props = block.getProperties ? block.getProperties() : {};
+                if (!('facing' in props)) return `${block.name} has no direction to turn.`;
+                if (!['north', 'south', 'east', 'west', 'up', 'down'].includes(facing)) throw new Error('Invalid facing');
+                props.facing = facing;
+                const states = Object.entries(props).map(([k, v]) => `${k}=${v}`).join(',');
+                const p = block.position;
+                const updated = waitFor(agent.bot, `blockUpdate:${p}`, null, 3000);
+                run(agent, `setblock ${p.x} ${p.y} ${p.z} minecraft:${block.name}[${states}] replace`);
+                await updated;
+                const now = agent.bot.blockAt(p);
+                const nowFacing = now?.getProperties ? now.getProperties().facing : undefined;
+                return nowFacing === facing ? `${block.name} at ${p.x}, ${p.y}, ${p.z} now faces ${facing}.` : `Sent, but the block now shows facing=${nowFacing} (the server may name this state differently).`;
+            },
+        },
+        {
+            name: 'rescue_teleport',
+            description: 'OP: only when you are really stuck (trapped, buried, stuck after a glitch, unstuck/goToSurface failed). mode "surface": straight up to the surface above you (no sideways move); mode "refresh": teleport onto your own position to fix a position glitch. At most every 2 minutes.',
+            inputSchema: { type: 'object', properties: { mode: { type: 'string', enum: ['surface', 'refresh'] } }, required: ['mode'] },
+            run: async (agent, { mode }) => {
+                need(agent);
+                const bot = agent.bot;
+                const wait = (agent.lastRescue || 0) + RESCUE_COOLDOWN_MS - Date.now();
+                if (wait > 0) return `Rescue teleport was used recently, try again in ${Math.ceil(wait / 1000)} s.`;
+                const p = bot.entity.position;
+                let target = p.floored();
+                if (mode === 'surface') {
+                    const solid = (y) => bot.blockAt(new Vec3(p.x, y, p.z))?.boundingBox === 'block';
+                    const free = (y) => { const b = bot.blockAt(new Vec3(p.x, y, p.z)); return b && b.boundingBox === 'empty' && !/lava|fire/.test(b.name); };
+                    const nether = /nether/.test(String(bot.game.dimension));
+                    let found = null;
+                    if (nether) {
+                        // the nether has a bedrock roof: take the first safe pocket above
+                        for (let y = target.y + 1; y < 126 && !found; y++) if (solid(y - 1) && free(y) && free(y + 1)) found = y;
+                    } else {
+                        for (let y = 319; y > target.y && !found; y--) if (solid(y - 1) && free(y) && free(y + 1)) found = y;
+                    }
+                    if (!found) return 'No safe surface found straight above you.';
+                    target = new Vec3(target.x, found, target.z);
+                }
+                const moved = waitFor(bot, 'forcedMove', null, 5000);
+                run(agent, `tp ${bot.username} ${target.x + 0.5} ${target.y} ${target.z + 0.5}`);
+                agent.lastRescue = Date.now();
+                if (!await moved) return 'Rescue teleport did not happen.';
+                return `Rescued to ${fmt(here(bot))}.`;
+            },
+        },
+        {
+            name: 'announce',
+            description: 'OP: a colored, highlighted message to everyone (e.g. an invitation, a finished build, a short help text). Normal talk stays in chat. At most every 30 seconds, max 150 characters.',
+            inputSchema: {
+                type: 'object',
+                properties: { text: { type: 'string' }, color: { type: 'string', enum: COLORS } },
+                required: ['text'],
+            },
+            run: async (agent, { text, color = 'white' }) => {
+                need(agent);
+                const wait = (agent.lastAnnounce || 0) + ANNOUNCE_COOLDOWN_MS - Date.now();
+                if (wait > 0) return `Wait ${Math.ceil(wait / 1000)} s before the next announcement.`;
+                const t = clean(text, 150);
+                if (!t) throw new Error('Empty text');
+                const c = COLORS.includes(color) ? color : 'white';
+                const json = JSON.stringify(['', { text: '✦ CLAUDE: ', color: '#D97757', bold: true }, { text: t, color: c }]);
+                const cmd = `tellraw @a ${json}`;
+                if (cmd.length > 256) throw new Error('Text too long after escaping, shorten it.');
+                run(agent, cmd);
+                agent.lastAnnounce = Date.now();
+                return 'Announced.';
             },
         },
         {
