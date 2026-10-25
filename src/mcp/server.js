@@ -20,7 +20,7 @@ import * as skills from '../agent/library/skills.js';
 import * as world from '../agent/library/world.js';
 import settings from '../agent/settings.js';
 import { formatEvent } from './events.js';
-import { splitChat } from './agent.js';
+import { splitChat, PROTECTED_MODES } from './agent.js';
 import { opTools } from './optools.js';
 
 const ACTION_WAIT_MS = 25000;
@@ -150,6 +150,8 @@ async function runCommand(agent, command, args) {
         return String(n);
     });
     if (command.name === '!setMode' && args.mode_name === 'cheat') throw new Error('cheat mode is not available on this server.');
+    if (command.name === '!setMode' && PROTECTED_MODES.includes(args.mode_name) && !(args.on === true || args.on === 'true'))
+        return `${args.mode_name} stays on. To stand still on purpose use stay (it pauses these reflexes while it runs).`;
     const message = parts.length ? `${command.name}(${parts.join(', ')})` : command.name;
 
     const promise = executeCommand(agent, message);
@@ -190,7 +192,10 @@ function shortStatus(agent) {
     if (!agent.connected) return 'Bot: not connected.';
     const b = agent.bot;
     const p = b.entity.position;
-    const action = agent.actions.currentActionLabel || 'idle';
+    const run = agent.actionRun;
+    const action = agent.actions.currentActionLabel
+        ? `${agent.actions.currentActionLabel} (${run ? Math.round((Date.now() - run.started) / 1000) : '?'}s)`
+        : 'idle';
     return `Bot: pos ${p.x.toFixed(0)}, ${p.y.toFixed(0)}, ${p.z.toFixed(0)} in ${agent.world || b.game.dimension} (${b.game.gameMode}) | health ${Math.round(b.health)}/20 | food ${Math.round(b.food)}/20 | ${action}`;
 }
 

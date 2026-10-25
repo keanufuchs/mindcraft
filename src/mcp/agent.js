@@ -14,6 +14,12 @@ import { Guard } from './guard.js';
 import { opOnSpawn } from './optools.js';
 
 const UPDATE_INTERVAL = 300;
+// reflexes the controller may not switch off (stay pauses them on its own)
+export const PROTECTED_MODES = ['unstuck', 'self_preservation', 'self_defense'];
+// actions that legitimately stand still
+const NO_WATCH = ['action:stay', 'action:followPlayer', 'action:fly_to', 'mode:'];
+const STALL_WARN_S = 60;
+const STALL_STOP_S = 150;
 const IGNORE_SYSTEM = ['Set own game mode to', 'Set the time to', 'Set the difficulty to', 'Teleported ', 'Set the weather to', 'Gamerule '];
 
 export class McpAgent {
@@ -23,6 +29,12 @@ export class McpAgent {
         this.name = settings.bot_name;
         this.events = new EventQueue();
         this.actions = new ActionManager(this);
+        // remember when the current action started and when it last made progress (stall watchdog)
+        const execute = this.actions._executeAction.bind(this.actions);
+        this.actions._executeAction = (...args) => {
+            this.actionRun = { started: Date.now(), lastProgress: Date.now(), sig: null };
+            return execute(...args);
+        };
         this.memory_bank = new MemoryBank();
         this.memory_bank.loadJson(state.places || {});
         this.guard = new Guard(state, settings.guard || {});
@@ -42,6 +54,7 @@ export class McpAgent {
             shouldInterrupt: () => false, handleUserPromptedCmd: () => {}, update: () => {},
         };
         const modes = { ...settings.modes, ...(state.modes || {}) };
+        for (const m of PROTECTED_MODES) modes[m] = true;
         this.prompter = { profile: { name: this.name, modes }, getName: () => this.name, getInitModes: () => modes };
     }
 
@@ -185,12 +198,43 @@ export class McpAgent {
             const start = Date.now();
             try {
                 await this.bot.modes.update();
+                this.checkStalled();
                 const log = this.bot.modes.flushBehaviorLog().trim();
                 if (log) this.events.push({ type: 'behavior', text: log.replaceAll('\n', ' | ') });
             } catch (err) {
                 console.error('mode update failed:', err);
             }
             await sleep(Math.max(0, UPDATE_INTERVAL - (Date.now() - start)));
+        }
+    }
+
+    // An action that neither moves the bot nor changes its inventory is probably stuck
+    // (e.g. waiting for an item that floated away). Warn the controller, then stop it.
+    checkStalled() {
+        const run = this.actionRun;
+        const label = this.actions.currentActionLabel || '';
+        if (!this.actions.executing || !run || NO_WATCH.some(l => label.startsWith(l))) return;
+        const b = this.bot;
+        const p = b.entity.position;
+        const items = b.inventory.items().reduce((n, i) => n + i.count, 0);
+        const sig = `${Math.round(p.x)},${Math.round(p.y)},${Math.round(p.z)}|${items}|${b.targetDigBlock ? b.targetDigBlock.position : ''}`;
+        const now = Date.now();
+        if (sig !== run.sig) {
+            run.sig = sig;
+            run.lastProgress = now;
+            return;
+        }
+        const idle = Math.round((now - run.lastProgress) / 1000);
+        const name = label.replace('action:', '');
+        if (idle >= STALL_WARN_S && !run.warned) {
+            run.warned = true;
+            this.events.push({ type: 'danger', text: `${name} has made no progress for ${idle}s (not moving, inventory unchanged). Probably stuck: call stop and try something else. It is stopped automatically after ${STALL_STOP_S}s.` });
+        }
+        if (idle >= STALL_STOP_S && !run.stopped) {
+            run.stopped = true;
+            this.events.push({ type: 'system', text: `${name} stopped automatically after ${idle}s without progress.` });
+            this.actions.cancelResume();
+            this.actions.stop();
         }
     }
 
