@@ -64,6 +64,10 @@ export class Guard {
             if (this.protects(block)) {
                 throw new Error(`Protected block ${block.name} at ${fmt(block.position)}: ${this.lastReason}`);
             }
+            // mineflayer computes the dig time once at the start; starting while falling (e.g. right
+            // after breaking the block below) uses the 5x airborne penalty for the whole dig
+            if (!bot.entity.onGround && !bot.entity.isInWater) await waitForGround(bot, 1500);
+            if (process.env.DEBUG_MOVES) console.log(`[dig] ${block.name} expected ${bot.digTime(block)}ms onGround=${bot.entity.onGround} held=${bot.heldItem?.name}`);
             const res = await origDig(block, ...args);
             this.forget(block.position);
             return res;
@@ -202,6 +206,17 @@ export class Guard {
         }
         return true;
     }
+}
+
+function waitForGround(bot, ms) {
+    return new Promise(resolve => {
+        const start = Date.now();
+        const check = () => {
+            if (bot.entity.onGround || Date.now() - start > ms) { bot.off('physicsTick', check); resolve(); }
+        };
+        bot.on('physicsTick', check);
+        check();
+    });
 }
 
 function hasCustomName(entity) {
