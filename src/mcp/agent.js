@@ -165,7 +165,7 @@ export class McpAgent {
                 const p = bot.entity.position;
                 this.memory_bank.rememberPlace('last_death_position', p.x, p.y, p.z);
                 this.persist();
-                this.events.push({ type: 'death', text: `${message} at ${p.x.toFixed(0)}, ${p.y.toFixed(0)}, ${p.z.toFixed(0)} (${bot.game.dimension}). Items are dropped there, saved as place 'last_death_position'. Current action was stopped, you respawned.` });
+                this.events.push({ type: 'death', text: `${message} at ${p.x.toFixed(0)}, ${p.y.toFixed(0)}, ${p.z.toFixed(0)} in world ${this.world || bot.game.dimension}. Items are dropped there, saved as place 'last_death_position'. Current action was stopped, you respawned.` });
             }
         });
 
