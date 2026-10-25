@@ -88,48 +88,52 @@ export function initBot(username) {
     if (options.version) fixCommandChecksum(options.version);
     const bot = createBot(options);
 
-    // Throttle position packets to avoid kicks on Paper/Spigot servers
-    // Paper enforces stricter packet rate limits than vanilla, causing ECONNRESET
-    // when mineflayer sends position updates faster than 50ms apart
-    let lastPositionUpdate = 0;
-    let pendingPositionPacket = null;
-    const POSITION_THROTTLE_MS = 50;
+    // Movement packets like a real client: at most one per physics tick, then client_tick_end.
+    // Mineflayer writes position/look packets at arbitrary times (look(), pathfinder, teleport
+    // answers), sometimes several per tick, and <= 4.39 never sends client_tick_end
+    // (PrismarineJS/mineflayer#4189). Paper 26.3 counts client ticks via tick_end and corrects
+    // ("forcedMove") or kicks clients that move without/with too many ticks. So movement packets are
+    // collected and merged, and flushed together with one tick_end at the end of each physics tick.
     const originalWrite = bot._client.write.bind(bot._client);
-    // 26.3 servers kick clients that send a second move packet without client_tick_end in between
-    // (invalid_player_movement). mineflayer <= 4.39 never sends it (PrismarineJS/mineflayer#4189),
-    // so end the "tick" after every movement packet. Older protocols have no tick_end packet.
+    const MOVE = new Set(['position', 'position_look', 'look', 'flying']);
+    let pending = null;
     let tickEndSupported = true;
-    const writeMove = (name, data) => {
-        const res = originalWrite(name, data);
+    const merge = (a, name, data) => {
+        if (!a) return { name, data: { ...data } };
+        const hasPos = (n) => n === 'position' || n === 'position_look';
+        const hasLook = (n) => n === 'look' || n === 'position_look';
+        const d = { ...a.data, ...data };
+        const pos = hasPos(a.name) || hasPos(name);
+        const look = hasLook(a.name) || hasLook(name);
+        if (!pos) { delete d.x; delete d.y; delete d.z; }
+        if (!look) { delete d.yaw; delete d.pitch; }
+        return { name: pos && look ? 'position_look' : pos ? 'position' : look ? 'look' : 'flying', data: d };
+    };
+    const flush = () => {
+        if (pending) {
+            const p = pending;
+            pending = null;
+            originalWrite(p.name, p.data);
+        }
         if (tickEndSupported) {
             try { originalWrite('tick_end', {}); } catch (err) { tickEndSupported = false; }
         }
-        return res;
     };
     bot._client.write = function(name, data) {
-        if (name === 'flying') return writeMove(name, data);
-        if (name === 'position' || name === 'position_look' || name === 'look') {
-            const now = Date.now();
-            if (now - lastPositionUpdate < POSITION_THROTTLE_MS) {
-                // Queue this packet so the last position update is never lost
-                if (!pendingPositionPacket) {
-                    pendingPositionPacket = setTimeout(() => {
-                        pendingPositionPacket = null;
-                        lastPositionUpdate = Date.now();
-                        writeMove(name, data);
-                    }, POSITION_THROTTLE_MS - (now - lastPositionUpdate));
-                }
-                return;
-            }
-            lastPositionUpdate = now;
-            if (pendingPositionPacket) {
-                clearTimeout(pendingPositionPacket);
-                pendingPositionPacket = null;
-            }
-            return writeMove(name, data);
+        if (MOVE.has(name) && bot._client.state === 'play') {
+            pending = merge(pending, name, data);
+            return;
         }
         return originalWrite(name, data);
     };
+    // physicsTick fires inside the tick, right before mineflayer sends this tick's position:
+    // flush after the synchronous tick code has finished
+    bot.on('physicsTick', () => queueMicrotask(flush));
+    // safety net if physics is paused (e.g. not spawned yet): still flush pending movement
+    let lastTick = Date.now();
+    bot.on('physicsTick', () => { lastTick = Date.now(); });
+    const safety = setInterval(() => { if (pending && Date.now() - lastTick > 200) flush(); }, 100);
+    bot.once('end', () => clearInterval(safety));
 
     // Suppress PartialReadError for non-critical packets
     // Paper servers sometimes send packets that node-minecraft-protocol
