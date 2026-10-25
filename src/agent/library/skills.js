@@ -341,6 +341,10 @@ export async function attackEntity(bot, entity, kill=true) {
      * await skills.attackEntity(bot, entity);
      **/
 
+    if (bot.guard && !bot.guard.mayAttack(entity)) {
+        log(bot, `Refused to attack ${entity.name}: ${bot.guard.lastReason}`);
+        return false;
+    }
     let pos = entity.position;
     await equipHighestAttack(bot)
 

@@ -8,6 +8,7 @@
         "@google/genai": "^1.15.0",
         "@huggingface/inference": "^2.8.1",
         "@mistralai/mistralai": "^1.1.0",
+        "@modelcontextprotocol/sdk": "^1.32.2",
         "canvas": "^3.1.0",
         "cheerio": "^1.0.0",
         "eslint": "^9.13.0",
@@ -44,6 +45,7 @@
     "scripts": {
         "postinstall": "patch-package",
         "start": "node main.js",
+        "mcp": "node mcp.js",
         "reinstall": "npm run clean:modules && npm install",
         "clean:modules": "node -e \"const fs=require('fs');const p=require('path');['node_modules','package-lock.json'].forEach(f=>{if(fs.existsSync(f)){if(fs.lstatSync(f).isDirectory()){fs.rmSync(f,{recursive:true,force:true});}else{fs.unlinkSync(f);}}});\""
     },

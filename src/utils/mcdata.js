@@ -60,6 +60,7 @@ export function initBot(username) {
         auth: settings.auth,
         version: mc_version,
         checkTimeoutInterval: 60000,  // 60s keep-alive check (default 30s) — reduces disconnects on slow servers
+        ...(settings.bot_options || {}), // extra mineflayer options, e.g. profilesFolder/onMsaCode (MCP mode)
     }
     if (!mc_version || mc_version === "auto") {
         delete options.version;

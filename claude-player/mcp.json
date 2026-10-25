@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "minecraft": {
+      "type": "http",
+      "url": "${MC_BOT_URL}",
+      "headers": { "Authorization": "Bearer ${MC_BOT_TOKEN}" }
+    }
+  }
+}
