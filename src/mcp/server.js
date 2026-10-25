@@ -287,6 +287,8 @@ function customTools() {
                 const list = [...blocks].sort((a, b) => a.y - b.y || a.x - b.x || a.z - b.z);
                 const promise = agent.actions.runAction('action:place_blocks', async () => {
                     const bot = agent.bot;
+                    // building often means standing still; the stall watchdog (inventory changes) covers real hangs
+                    bot.modes.pause('unstuck');
                     let placed = 0;
                     let todo = list;
                     // blocks without support may become placeable once their neighbours exist: retry in passes
