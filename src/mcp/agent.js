@@ -60,7 +60,6 @@ export class McpAgent {
         };
         const bot = this.bot = initBot(this.name);
         initModes(this);
-        this.guard.install(bot);
 
         const spawnTimeout = setInterval(() => {
             if (this.msaPending) return; // waiting for a human to log in
@@ -68,6 +67,8 @@ export class McpAgent {
         }, (settings.spawn_timeout || 60) * 1000);
 
         bot.once('login', () => {
+            // mineflayer's own plugins (dig, placeBlock, ...) are loaded after createBot, so wrap them here
+            this.guard.install(bot);
             this.msaPending = false;
             this.name = bot.username;
             this.prompter.profile.name = bot.username;
