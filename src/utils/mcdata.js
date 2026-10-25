@@ -132,6 +132,10 @@ export function initBot(username) {
         }
     };
     bot._client.write = function(name, data) {
+        if (process.env.DEBUG_MOVES && name === 'block_dig') {
+            const st = { 0: 'start', 1: 'cancel', 2: 'finish' }[data.status] ?? data.status;
+            console.log(`[dig] ${st} ${data.location.x},${data.location.y},${data.location.z} t=${Date.now() % 100000} onGround=${bot.entity?.onGround} inWater=${bot.entity?.isInWater}`);
+        }
         if (MOVE.has(name) && bot._client.state === 'play') {
             pending = merge(pending, name, data);
             return;
@@ -141,6 +145,10 @@ export function initBot(username) {
     // physicsTick fires inside the tick, right before mineflayer sends this tick's position:
     // flush after the synchronous tick code has finished
     bot.on('physicsTick', () => queueMicrotask(flush));
+    if (process.env.DEBUG_MOVES) {
+        bot._client.on('block_update', (p) => console.log(`[dig] server block ${p.location.x},${p.location.y},${p.location.z} -> state ${p.type} t=${Date.now() % 100000}`));
+        bot._client.on('acknowledge_player_digging', (p) => console.log(`[dig] ack seq ${p.sequenceId} t=${Date.now() % 100000}`));
+    }
     // safety net if physics is paused (e.g. not spawned yet): still flush pending movement
     let lastTick = Date.now();
     bot.on('physicsTick', () => { lastTick = Date.now(); });
