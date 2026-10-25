@@ -39,6 +39,7 @@ Rules enforced in code, independent of the prompt:
 | `MC_VERSION` | `auto` | client protocol version, e.g. `1.21.11` (server may be newer with ViaBackwards) |
 | `MC_AUTH` | `offline` | `microsoft` for online-mode servers; device-code login is printed to the log once |
 | `BOT_NAME` | `Claude` | offline name / Microsoft account cache key |
+| `BOT_ALIASES` | – | comma-separated display names of the bot (nickname plugins), so it ignores its own chat |
 | `MCP_PORT` | `3100` | MCP endpoint `http://host:3100/mcp`, health `GET /health` |
 | `MCP_TOKEN` | – | required Bearer token (`MCP_NO_AUTH=1` only for local tests) |
 | `DATA_DIR` | `./bots/mcp` | `state.json` (places, own blocks, notes, modes) and `auth/` (Microsoft token cache) |

@@ -19,6 +19,7 @@ setSettings({
     auth: env.MC_AUTH || 'offline',
     minecraft_version: env.MC_VERSION || 'auto',
     bot_name: env.BOT_NAME || 'Claude',
+    bot_aliases: (env.BOT_ALIASES || '').split(',').map(a => a.trim()).filter(Boolean),
     bot_options: { profilesFolder: path.resolve(dataDir, 'auth') },
     mcp_port: Number(env.MCP_PORT || 3100),
     mcp_token: env.MCP_TOKEN || '',

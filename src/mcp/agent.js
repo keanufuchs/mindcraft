@@ -99,26 +99,32 @@ export class McpAgent {
         bot.on('error', (err) => console.error('Bot error:', err?.message || err));
     }
 
+    // own name plus display aliases (e.g. a nickname plugin shows the bot under another name)
+    isSelf(username) {
+        const n = String(username || '').toLowerCase();
+        return n === String(this.name).toLowerCase() || (settings.bot_aliases || []).some(a => a.toLowerCase() === n);
+    }
+
     setupEvents(bot, gen) {
         const alive = () => gen === this.generation;
 
         bot.on('chat', (username, message) => {
-            if (!alive() || username === this.name || !message) return;
+            if (!alive() || this.isSelf(username) || !message) return;
             if (IGNORE_SYSTEM.some(m => message.startsWith(m))) return;
             this.last_sender = username;
             this.events.push({ type: 'chat', from: username, text: message });
         });
         bot.on('whisper', (username, message) => {
-            if (!alive() || username === this.name || !message) return;
+            if (!alive() || this.isSelf(username) || !message) return;
             this.last_sender = username;
             this.events.push({ type: 'whisper', from: username, text: message });
         });
         bot.on('playerJoined', (player) => {
-            if (!alive() || Date.now() - this.spawnedAt < 5000 || player.username === this.name) return;
+            if (!alive() || Date.now() - this.spawnedAt < 5000 || this.isSelf(player.username)) return;
             this.events.push({ type: 'player', text: `${player.username} joined the server` });
         });
         bot.on('playerLeft', (player) => {
-            if (!alive() || player.username === this.name) return;
+            if (!alive() || this.isSelf(player.username)) return;
             this.events.push({ type: 'player', text: `${player.username} left the server` });
         });
 
