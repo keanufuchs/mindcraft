@@ -9,6 +9,16 @@ export class ActionManager {
         this.resume_name = '';
         this.last_action_time = 0;
         this.recent_action_counter = 0;
+        this.runId = 0; // lets a hung action be abandoned without restarting the process (MCP mode)
+    }
+
+    // Forget the current action (it ignored interrupts). Its promise may still settle later; the
+    // runId check keeps it from resetting the state of whatever action runs by then.
+    abandon() {
+        this.runId++;
+        this.executing = false;
+        this.currentActionLabel = '';
+        this.currentActionFn = null;
     }
 
     async resumeAction(actionFn, timeout) {
@@ -95,6 +105,7 @@ export class ActionManager {
             this.executing = true;
             this.currentActionLabel = actionLabel;
             this.currentActionFn = actionFn;
+            const runId = ++this.runId;
 
             // timeout in minutes
             if (timeout > 0) {
@@ -103,6 +114,7 @@ export class ActionManager {
 
             // start the action
             await actionFn();
+            if (runId !== this.runId) return { success: false, message: 'Action was abandoned.', interrupted: true, timedout: false };
 
             // mark action as finished + cleanup
             this.executing = false;
@@ -124,6 +136,10 @@ export class ActionManager {
             // return action status report
             return { success: true, message: output, interrupted, timedout };
         } catch (err) {
+            if (this.runId !== undefined && this.currentActionFn !== actionFn) {
+                console.warn('Abandoned action threw:', err?.message || err);
+                return { success: false, message: 'Action was abandoned.', interrupted: true, timedout: false };
+            }
             this.executing = false;
             this.currentActionLabel = '';
             this.currentActionFn = null;

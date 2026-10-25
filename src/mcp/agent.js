@@ -305,6 +305,19 @@ export class McpAgent {
 
     cleanKill(msg = 'Killing agent process...') {
         // the unstuck mode gives up after 10 s; a reconnect would only make the bot leave and rejoin
+        // Mindcraft restarts after every smelt to refresh the inventory; here the bot stays online.
+        if (/Safely restarting to update inventory/.test(msg)) {
+            this.events.push({ type: 'system', text: 'Smelting finished. Check the result with inventory.' });
+            return;
+        }
+        // An action that ignores interrupts for 10 s: drop it instead of restarting the whole process.
+        if (/refused stop/.test(msg)) {
+            this.requestInterrupt();
+            this.actions.abandon();
+            this.bot.emit('idle');
+            this.events.push({ type: 'system', text: 'The previous action hung and was abandoned. You can start the next one.' });
+            return;
+        }
         // Its retries every 20 s would interrupt every escape attempt, so pause it for 2 minutes.
         if (/couldn't get unstuck/.test(msg)) {
             this.requestInterrupt();
